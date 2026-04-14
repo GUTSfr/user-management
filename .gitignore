@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+## Secrets
+appsettings.Production.json
+**/secrets.json
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Rider / VS
+.idea/
+*.sln.DotSettings.user

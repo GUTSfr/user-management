@@ -37,9 +37,8 @@ public class AccountController : Controller
         if (result.Succeeded)
         {
             // Auto-confirm email (no email service needed per task)
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            await _userManager.ConfirmEmailAsync(user, token);
-
+		user.EmailConfirmed = true;
+		await _userManager.UpdateAsync(user);
             await _signInManager.SignInAsync(user, isPersistent: false);
             return RedirectToAction("Index", "Users");
         }

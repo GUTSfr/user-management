@@ -1,0 +1,187 @@
+@model IEnumerable<AppUser>
+@{
+    ViewData["Title"] = "User Management";
+    var currentUserId = ViewData["CurrentUserId"] as string;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="page-title mb-1"><i class="bi bi-people-fill me-2 text-primary"></i>User Management</h2>
+        <p class="text-muted mb-0 small">@Model.Count() registered user(s)</p>
+    </div>
+    <div class="toolbar d-flex gap-2 flex-wrap">
+        <button class="btn btn-warning btn-sm" id="btnBlock" disabled>
+            <i class="bi bi-lock-fill me-1"></i>Block
+        </button>
+        <button class="btn btn-success btn-sm" id="btnUnblock" disabled>
+            <i class="bi bi-unlock-fill me-1"></i>Unblock
+        </button>
+        <button class="btn btn-danger btn-sm" id="btnDelete" disabled>
+            <i class="bi bi-trash3-fill me-1"></i>Delete
+        </button>
+    </div>
+</div>
+
+<div class="card table-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="usersTable">
+            <thead>
+                <tr>
+                    <th class="col-check">
+                        <input type="checkbox" class="form-check-input" id="selectAll" title="Select all" />
+                    </th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Registered</th>
+                    <th>Last Login</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Model)
+                {
+                    var isCurrentUser = user.Id == currentUserId;
+                    var rowClass = user.IsBlocked ? "table-row-blocked" : "";
+                    <tr class="@rowClass user-row" data-id="@user.Id">
+                        <td>
+                            <input type="checkbox" class="form-check-input user-checkbox" value="@user.Id" />
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar @(user.IsBlocked ? "avatar-blocked" : "")">
+                                    @user.Name.Substring(0, 1).ToUpper()
+                                </div>
+                                <div>
+                                    <div class="fw-semibold">
+                                        @user.Name
+                                        @if (isCurrentUser)
+                                        {
+                                            <span class="badge bg-primary ms-1 badge-you">you</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-muted font-mono">@user.Email</td>
+                        <td class="text-muted small">@user.RegisteredAt.ToString("MMM d, yyyy HH:mm")</td>
+                        <td class="text-muted small">
+                            @if (user.LastLoginAt.HasValue)
+                            {
+                                @user.LastLoginAt.Value.ToString("MMM d, yyyy HH:mm")
+                            }
+                            else
+                            {
+                                <span class="text-muted fst-italic">Never</span>
+                            }
+                        </td>
+                        <td>
+                            @if (user.IsBlocked)
+                            {
+                                <span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>Blocked</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="empty-state text-center py-5">
+        <i class="bi bi-people display-1 text-muted"></i>
+        <p class="mt-3 text-muted">No users found.</p>
+    </div>
+}
+
+@section Scripts {
+<script>
+const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value
+    || document.cookie.split(';').find(c => c.includes('XSRF'))?.split('=')[1] || '';
+
+// We need the antiforgery token — add a hidden form
+const afForm = document.createElement('form');
+afForm.innerHTML = '@Html.AntiForgeryToken()';
+document.body.appendChild(afForm);
+const antiForgeryToken = afForm.querySelector('input[name="__RequestVerificationToken"]').value;
+document.body.removeChild(afForm);
+
+const checkboxes = document.querySelectorAll('.user-checkbox');
+const selectAll = document.getElementById('selectAll');
+const btnBlock = document.getElementById('btnBlock');
+const btnUnblock = document.getElementById('btnUnblock');
+const btnDelete = document.getElementById('btnDelete');
+
+function getSelected() {
+    return [...document.querySelectorAll('.user-checkbox:checked')].map(c => c.value);
+}
+
+function updateButtons() {
+    const selected = getSelected();
+    const hasSelected = selected.length > 0;
+    btnBlock.disabled = !hasSelected;
+    btnUnblock.disabled = !hasSelected;
+    btnDelete.disabled = !hasSelected;
+}
+
+checkboxes.forEach(cb => cb.addEventListener('change', updateButtons));
+
+selectAll.addEventListener('change', function () {
+    checkboxes.forEach(cb => cb.checked = this.checked);
+    updateButtons();
+});
+
+// Update selectAll state when individual checkboxes change
+checkboxes.forEach(cb => cb.addEventListener('change', function () {
+    selectAll.indeterminate = false;
+    const total = checkboxes.length;
+    const checked = getSelected().length;
+    if (checked === 0) selectAll.checked = false;
+    else if (checked === total) selectAll.checked = true;
+    else selectAll.indeterminate = true;
+}));
+
+async function doAction(url, ids) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'RequestVerificationToken': antiForgeryToken
+        },
+        body: JSON.stringify({ ids })
+    });
+    const data = await res.json();
+    if (data.redirect) {
+        window.location.href = data.redirect;
+    } else if (data.success) {
+        window.location.reload();
+    } else {
+        alert(data.message || 'An error occurred.');
+    }
+}
+
+btnBlock.addEventListener('click', function () {
+    const ids = getSelected();
+    if (ids.length && confirm(`Block ${ids.length} selected user(s)?`)) {
+        doAction('/Users/Block', ids);
+    }
+});
+
+btnUnblock.addEventListener('click', function () {
+    const ids = getSelected();
+    if (ids.length) doAction('/Users/Unblock', ids);
+});
+
+btnDelete.addEventListener('click', function () {
+    const ids = getSelected();
+    if (ids.length && confirm(`Permanently delete ${ids.length} selected user(s)? This cannot be undone.`)) {
+        doAction('/Users/Delete', ids);
+    }
+});
+</script>
+}
